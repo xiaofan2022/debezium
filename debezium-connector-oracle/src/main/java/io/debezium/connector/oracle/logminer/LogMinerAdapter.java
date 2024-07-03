@@ -5,6 +5,9 @@
  */
 package io.debezium.connector.oracle.logminer;
 
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -18,6 +21,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+import io.debezium.jdbc.JdbcConfiguration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -85,7 +89,7 @@ public class LogMinerAdapter extends AbstractStreamingAdapter {
     }
 
     @Override
-    public StreamingChangeEventSource<OraclePartition, OracleOffsetContext> getSource(OracleConnection connection,
+    public StreamingChangeEventSource<OraclePartition, OracleOffsetContext> getSource(OracleConnection connection,OracleConnection miningJdbcConnection,
                                                                                       EventDispatcher<OraclePartition, TableId> dispatcher,
                                                                                       ErrorHandler errorHandler,
                                                                                       Clock clock,
@@ -96,6 +100,7 @@ public class LogMinerAdapter extends AbstractStreamingAdapter {
         return new LogMinerStreamingChangeEventSource(
                 connectorConfig,
                 connection,
+                miningJdbcConnection,
                 dispatcher,
                 errorHandler,
                 clock,

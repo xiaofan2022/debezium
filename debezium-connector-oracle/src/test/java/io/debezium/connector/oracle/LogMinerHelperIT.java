@@ -91,7 +91,7 @@ public class LogMinerHelperIT extends AbstractConnectorTest {
     public void shouldSetCorrectLogFiles() throws Exception {
         List<Scn> oneDayArchivedNextScn = getOneDayArchivedLogNextScn(conn);
         Scn oldestArchivedScn = getOldestArchivedScn(oneDayArchivedNextScn);
-        LogMinerHelper.setLogFilesForMining(conn, oldestArchivedScn, Duration.ofHours(0L), false, null, 5, Duration.ofSeconds(1), Duration.ofSeconds(60));
+        LogMinerHelper.setLogFilesForMining(conn,null, oldestArchivedScn, Duration.ofHours(0L), false, null, 5, Duration.ofSeconds(1), Duration.ofSeconds(60));
 
         List<LogFile> files = LogMinerHelper.getLogFilesForOffsetScn(conn, oldestArchivedScn, Duration.ofHours(0L), false, null);
         assertThat(files.size()).isEqualTo(getNumberOfAddedLogFiles(conn));

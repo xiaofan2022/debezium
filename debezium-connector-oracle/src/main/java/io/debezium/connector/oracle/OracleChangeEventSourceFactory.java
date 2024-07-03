@@ -24,7 +24,9 @@ import io.debezium.util.Strings;
 public class OracleChangeEventSourceFactory implements ChangeEventSourceFactory<OraclePartition, OracleOffsetContext> {
 
     private final OracleConnectorConfig configuration;
+    private final OracleConnectorConfig miningConfiguration;
     private final OracleConnection jdbcConnection;
+    private final OracleConnection miningJdbcConnection;
     private final ErrorHandler errorHandler;
     private final EventDispatcher<OraclePartition, TableId> dispatcher;
     private final Clock clock;
@@ -33,12 +35,15 @@ public class OracleChangeEventSourceFactory implements ChangeEventSourceFactory<
     private final OracleTaskContext taskContext;
     private final OracleStreamingChangeEventSourceMetrics streamingMetrics;
 
-    public OracleChangeEventSourceFactory(OracleConnectorConfig configuration, OracleConnection jdbcConnection,
+    public OracleChangeEventSourceFactory(OracleConnectorConfig configuration,OracleConnectorConfig miningConfiguration, OracleConnection jdbcConnection,
+                                          OracleConnection miningJdbcConnection,
                                           ErrorHandler errorHandler, EventDispatcher<OraclePartition, TableId> dispatcher, Clock clock, OracleDatabaseSchema schema,
                                           Configuration jdbcConfig, OracleTaskContext taskContext,
                                           OracleStreamingChangeEventSourceMetrics streamingMetrics) {
         this.configuration = configuration;
+        this.miningConfiguration=miningConfiguration;
         this.jdbcConnection = jdbcConnection;
+        this.miningJdbcConnection=miningJdbcConnection;
         this.errorHandler = errorHandler;
         this.dispatcher = dispatcher;
         this.clock = clock;
@@ -58,6 +63,7 @@ public class OracleChangeEventSourceFactory implements ChangeEventSourceFactory<
     public StreamingChangeEventSource<OraclePartition, OracleOffsetContext> getStreamingChangeEventSource() {
         return configuration.getAdapter().getSource(
                 jdbcConnection,
+                miningJdbcConnection,
                 dispatcher,
                 errorHandler,
                 clock,

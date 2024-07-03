@@ -51,7 +51,17 @@ public interface StreamingAdapter {
 
     OffsetContext.Loader<OracleOffsetContext> getOffsetContextLoader();
 
+    /*
+     * StreamingChangeEventSource<OraclePartition, OracleOffsetContext> getSource(OracleConnection connection,
+     * EventDispatcher<OraclePartition, TableId> dispatcher,
+     * ErrorHandler errorHandler, Clock clock,
+     * OracleDatabaseSchema schema,
+     * OracleTaskContext taskContext,
+     * Configuration jdbcConfig,
+     * OracleStreamingChangeEventSourceMetrics streamingMetrics);
+     */
     StreamingChangeEventSource<OraclePartition, OracleOffsetContext> getSource(OracleConnection connection,
+                                                                               OracleConnection miningJdbcConnection,
                                                                                EventDispatcher<OraclePartition, TableId> dispatcher,
                                                                                ErrorHandler errorHandler, Clock clock,
                                                                                OracleDatabaseSchema schema,

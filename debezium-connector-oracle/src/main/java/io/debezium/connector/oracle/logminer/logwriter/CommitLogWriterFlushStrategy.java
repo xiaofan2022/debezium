@@ -82,12 +82,12 @@ public class CommitLogWriterFlushStrategy implements LogWriterFlushStrategy {
 
     @Override
     public void flush(Scn currentScn) {
-        try {
+       /* try {
             connection.execute(UPDATE_FLUSH_TABLE + currentScn);
         }
         catch (SQLException e) {
             throw new DebeziumException("Failed to flush Oracle LogWriter (LGWR) buffers to disk", e);
-        }
+        }*/
     }
 
     /**
@@ -95,7 +95,7 @@ public class CommitLogWriterFlushStrategy implements LogWriterFlushStrategy {
      * so that when flushes occur that the update succeeds without failure.
      */
     private void createFlushTableIfNotExists() {
-        try {
+       /* try {
             if (!connection.isTableExists(LOGMNR_FLUSH_TABLE)) {
                 connection.executeWithoutCommitting(CREATE_FLUSH_TABLE);
             }
@@ -109,7 +109,7 @@ public class CommitLogWriterFlushStrategy implements LogWriterFlushStrategy {
         }
         catch (SQLException e) {
             throw new DebeziumException("Failed to create flush table", e);
-        }
+        }*/
     }
 
     /**

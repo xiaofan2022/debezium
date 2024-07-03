@@ -5,6 +5,21 @@
  */
 package io.debezium.connector.oracle;
 
+import io.debezium.DebeziumException;
+import io.debezium.config.Field;
+import io.debezium.connector.oracle.OracleConnectorConfig.ConnectorAdapter;
+import io.debezium.jdbc.JdbcConfiguration;
+import io.debezium.jdbc.JdbcConnection;
+import io.debezium.relational.Column;
+import io.debezium.relational.ColumnEditor;
+import io.debezium.relational.TableId;
+import io.debezium.relational.Tables;
+import io.debezium.relational.Tables.ColumnNameFilter;
+import io.debezium.util.Strings;
+import oracle.jdbc.OracleTypes;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.sql.Clob;
 import java.sql.DatabaseMetaData;
 import java.sql.PreparedStatement;
@@ -24,23 +39,6 @@ import java.util.Set;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import io.debezium.DebeziumException;
-import io.debezium.config.Field;
-import io.debezium.connector.oracle.OracleConnectorConfig.ConnectorAdapter;
-import io.debezium.jdbc.JdbcConfiguration;
-import io.debezium.jdbc.JdbcConnection;
-import io.debezium.relational.Column;
-import io.debezium.relational.ColumnEditor;
-import io.debezium.relational.TableId;
-import io.debezium.relational.Tables;
-import io.debezium.relational.Tables.ColumnNameFilter;
-import io.debezium.util.Strings;
-
-import oracle.jdbc.OracleTypes;
 
 public class OracleConnection extends JdbcConnection {
 
@@ -321,6 +319,58 @@ public class OracleConnection extends JdbcConnection {
         });
     }
 
+    public String getTableMetadataDdl(TableId tableId) throws SQLException, NonRelationalTableException {
+        final String tableType = "SELECT COUNT(1) FROM ALL_ALL_TABLES WHERE OWNER='" + tableId.schema()
+            + "' AND TABLE_NAME='" + tableId.table() + "' AND TABLE_TYPE IS NULL";
+        if (queryAndMap(tableType, rs -> rs.next() ? rs.getInt(1) : 0) == 0) {
+            throw new NonRelationalTableException("Table " + tableId + " is not a relational table");
+        }
+        StringBuilder ddlBuilder = new StringBuilder();
+        ddlBuilder.append("SELECT column_name, data_type, data_length, data_precision, data_scale, nullable ");
+        ddlBuilder.append("FROM dba_tab_columns WHERE owner = '").append(tableId.schema()).append("'");
+        ddlBuilder.append("  AND table_name = '").append(tableId.table()).append("'");
+        StringBuilder createTableSQL = new StringBuilder("CREATE TABLE " + tableId.schema() + "." + tableId + " (\n");
+
+        return queryAndMap(ddlBuilder.toString(), rs -> {
+            if (!rs.next()) {
+                throw new DebeziumException("Could not get DDL metadata for table: " + tableId);
+            }
+            boolean firstColumn = true;
+            if (!firstColumn) {
+                createTableSQL.append(",\n");
+            } else {
+                firstColumn = false;
+            }
+            String columnName = rs.getString("column_name");
+            String dataType = rs.getString("data_type");
+            int dataLength = rs.getInt("data_length");
+            int dataPrecision = rs.getInt("data_precision");
+            int dataScale = rs.getInt("data_scale");
+            String nullable = rs.getString("nullable");
+
+            createTableSQL.append("    ").append(columnName).append(" ").append(dataType);
+
+            if ("VARCHAR2".equals(dataType) || "CHAR".equals(dataType)) {
+                createTableSQL.append("(").append(dataLength).append(")");
+            } else if ("NUMBER".equals(dataType)) {
+                if (dataPrecision > 0) {
+                    createTableSQL.append("(").append(dataPrecision);
+                    if (dataScale > 0) {
+                        createTableSQL.append(", ").append(dataScale);
+                    }
+                    createTableSQL.append(")");
+                }
+            }
+
+            if ("N".equals(nullable)) {
+                createTableSQL.append(" NOT NULL");
+            }
+
+            createTableSQL.append("\n);");
+            return createTableSQL.toString();
+        });
+
+    }
     /**
      * Generate a given table's DDL metadata.
      *
@@ -329,37 +379,37 @@ public class OracleConnection extends JdbcConnection {
      * @throws SQLException if an exception occurred obtaining the DDL metadata
      * @throws NonRelationalTableException the table is not a relational table
      */
-    public String getTableMetadataDdl(TableId tableId) throws SQLException, NonRelationalTableException {
-        try {
-            // This table contains all available objects that are considered relational & object based.
-            // By querying for TABLE_TYPE is null, we are explicitly confirming what if an entry exists
-            // that the table is in-fact a relational table and if the result set is empty, the object
-            // is another type, likely an object-based table, in which case we cannot generate DDL.
-            final String tableType = "SELECT COUNT(1) FROM ALL_ALL_TABLES WHERE OWNER='" + tableId.schema()
-                    + "' AND TABLE_NAME='" + tableId.table() + "' AND TABLE_TYPE IS NULL";
-            if (queryAndMap(tableType, rs -> rs.next() ? rs.getInt(1) : 0) == 0) {
-                throw new NonRelationalTableException("Table " + tableId + " is not a relational table");
-            }
-
-            // The storage and segment attributes aren't necessary
-            executeWithoutCommitting("begin dbms_metadata.set_transform_param(DBMS_METADATA.SESSION_TRANSFORM, 'STORAGE', false); end;");
-            executeWithoutCommitting("begin dbms_metadata.set_transform_param(DBMS_METADATA.SESSION_TRANSFORM, 'SEGMENT_ATTRIBUTES', false); end;");
-            // In case DDL is returned as multiple DDL statements, this allows the parser to parse each separately.
-            // This is only critical during streaming as during snapshot the table structure is built from JDBC driver queries.
-            executeWithoutCommitting("begin dbms_metadata.set_transform_param(DBMS_METADATA.SESSION_TRANSFORM, 'SQLTERMINATOR', true); end;");
-            return queryAndMap("SELECT dbms_metadata.get_ddl('TABLE','" + tableId.table() + "','" + tableId.schema() + "') FROM DUAL", rs -> {
-                if (!rs.next()) {
-                    throw new DebeziumException("Could not get DDL metadata for table: " + tableId);
-                }
-
-                Object res = rs.getObject(1);
-                return ((Clob) res).getSubString(1, (int) ((Clob) res).length());
-            });
-        }
-        finally {
-            executeWithoutCommitting("begin dbms_metadata.set_transform_param(DBMS_METADATA.SESSION_TRANSFORM, 'DEFAULT'); end;");
-        }
-    }
+//    public String getTableMetadataDdl(TableId tableId) throws SQLException, NonRelationalTableException {
+//        try {
+//            // This table contains all available objects that are considered relational & object based.
+//            // By querying for TABLE_TYPE is null, we are explicitly confirming what if an entry exists
+//            // that the table is in-fact a relational table and if the result set is empty, the object
+//            // is another type, likely an object-based table, in which case we cannot generate DDL.
+//            final String tableType = "SELECT COUNT(1) FROM ALL_ALL_TABLES WHERE OWNER='" + tableId.schema()
+//                    + "' AND TABLE_NAME='" + tableId.table() + "' AND TABLE_TYPE IS NULL";
+//            if (queryAndMap(tableType, rs -> rs.next() ? rs.getInt(1) : 0) == 0) {
+//                throw new NonRelationalTableException("Table " + tableId + " is not a relational table");
+//            }
+//
+//            // The storage and segment attributes aren't necessary
+//            executeWithoutCommitting("begin dbms_metadata.set_transform_param(DBMS_METADATA.SESSION_TRANSFORM, 'STORAGE', false); end;");
+//            executeWithoutCommitting("begin dbms_metadata.set_transform_param(DBMS_METADATA.SESSION_TRANSFORM, 'SEGMENT_ATTRIBUTES', false); end;");
+//            // In case DDL is returned as multiple DDL statements, this allows the parser to parse each separately.
+//            // This is only critical during streaming as during snapshot the table structure is built from JDBC driver queries.
+//            executeWithoutCommitting("begin dbms_metadata.set_transform_param(DBMS_METADATA.SESSION_TRANSFORM, 'SQLTERMINATOR', true); end;");
+//            return queryAndMap("SELECT dbms_metadata.get_ddl('TABLE','" + tableId.table() + "','" + tableId.schema() + "') FROM DUAL", rs -> {
+//                if (!rs.next()) {
+//                    throw new DebeziumException("Could not get DDL metadata for table: " + tableId);
+//                }
+//
+//                Object res = rs.getObject(1);
+//                return ((Clob) res).getSubString(1, (int) ((Clob) res).length());
+//            });
+//        }
+//        finally {
+//            executeWithoutCommitting("begin dbms_metadata.set_transform_param(DBMS_METADATA.SESSION_TRANSFORM, 'DEFAULT'); end;");
+//        }
+//    }
 
     /**
      * Get the current connection's session statistic by name.

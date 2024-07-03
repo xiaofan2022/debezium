@@ -268,6 +268,7 @@ public abstract class AbstractInfinispanLogMinerEventProcessor extends AbstractL
     @Override
     protected PreparedStatement createQueryStatement() throws SQLException {
         final String query = LogMinerQueryBuilder.build(getConfig(), getSchema());
+        //这里改成min
         return jdbcConnection.connection().prepareStatement(query,
                 ResultSet.TYPE_FORWARD_ONLY,
                 ResultSet.CONCUR_READ_ONLY,

@@ -7,8 +7,11 @@ package io.debezium.connector.oracle;
 
 import java.sql.SQLException;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+import io.debezium.relational.history.KafkaDatabaseHistory;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -40,6 +43,7 @@ public class OracleConnectorTask extends BaseSourceTask<OraclePartition, OracleO
     private volatile OracleTaskContext taskContext;
     private volatile ChangeEventQueue<DataChangeEvent> queue;
     private volatile OracleConnection jdbcConnection;
+    private volatile OracleConnection miningConnection;
     private volatile ErrorHandler errorHandler;
     private volatile OracleDatabaseSchema schema;
 
@@ -48,15 +52,27 @@ public class OracleConnectorTask extends BaseSourceTask<OraclePartition, OracleO
         return Module.version();
     }
 
+    public OracleConnectorConfig getMiningConnectorConfig(Configuration config){
+        Configuration.Builder builder = Configuration.copy(config);
+        config.asMap().keySet().stream().filter(t->t.startsWith("mining")).forEach(t->{
+            //将mining.* 替换成* 例如：mining.database.dbname=>database.dbname
+            builder.with( t.substring(t.indexOf(".")+1),config.getString(t));
+        });
+        return  new OracleConnectorConfig(builder.build());
+    }
+
     @Override
     public ChangeEventSourceCoordinator<OraclePartition, OracleOffsetContext> start(Configuration config) {
         OracleConnectorConfig connectorConfig = new OracleConnectorConfig(config);
+
         TopicSelector<TableId> topicSelector = OracleTopicSelector.defaultSelector(connectorConfig);
         SchemaNameAdjuster schemaNameAdjuster = connectorConfig.schemaNameAdjustmentMode().createAdjuster();
 
         JdbcConfiguration jdbcConfig = connectorConfig.getJdbcConfig();
         jdbcConnection = new OracleConnection(jdbcConfig, () -> getClass().getClassLoader());
 
+        OracleConnectorConfig miningConnectorConfig = getMiningConnectorConfig(config);
+        miningConnection=new OracleConnection(miningConnectorConfig.getJdbcConfig(),() -> getClass().getClassLoader());
         validateRedoLogConfiguration();
 
         OracleValueConverters valueConverters = new OracleValueConverters(connectorConfig, jdbcConnection);
@@ -117,10 +133,11 @@ public class OracleConnectorTask extends BaseSourceTask<OraclePartition, OracleO
                 errorHandler,
                 OracleConnector.class,
                 connectorConfig,
-                new OracleChangeEventSourceFactory(connectorConfig, jdbcConnection, errorHandler, dispatcher, clock, schema, jdbcConfig, taskContext, streamingMetrics),
+                new OracleChangeEventSourceFactory(connectorConfig,miningConnectorConfig, jdbcConnection,miningConnection, errorHandler, dispatcher, clock, schema, jdbcConfig, taskContext, streamingMetrics),
                 new OracleChangeEventSourceMetricsFactory(streamingMetrics),
                 dispatcher,
                 schema);
+
 
         coordinator.start(taskContext, this.queue, metadataProvider);
 

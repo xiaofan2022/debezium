@@ -7,6 +7,9 @@ package io.debezium.connector.oracle.logminer;
 
 import java.time.Duration;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import io.debezium.connector.oracle.OracleConnectorConfig;
 import io.debezium.connector.oracle.Scn;
 import io.debezium.relational.TableId;
@@ -24,6 +27,7 @@ import io.debezium.util.Strings;
  // a row is returned that contains the value CORRUPTED_BLOCKS in the OPERATION column, 1343 in the STATUS column, and the number of blocks skipped in the INFO column.
  */
 public class SqlUtils {
+    private static final Logger LOGGER = LoggerFactory.getLogger(SqlUtils.class);
 
     // ****** RAC specifics *****//
     // https://docs.oracle.com/cd/B28359_01/server.111/b28319/logminer.htm#i1015913
@@ -202,6 +206,20 @@ public class SqlUtils {
         String miningStrategy;
         if (strategy.equals(OracleConnectorConfig.LogMiningStrategy.CATALOG_IN_REDO)) {
             miningStrategy = "DBMS_LOGMNR.DICT_FROM_REDO_LOGS + DBMS_LOGMNR.DDL_DICT_TRACKING ";
+        }
+        else if (strategy.equals(OracleConnectorConfig.LogMiningStrategy.OFFLINE_CATALOG)) {
+            LOGGER.warn("startScn:{},endScn:{}", startScn, endScn);
+            String sql = "BEGIN sys.dbms_logmnr.start_logmnr(" +
+                    "startScn => '" + startScn + "', " +
+                    "endScn => '" + endScn + "', " +
+                    "DICTFILENAME =>  '/opt/oracle/oradata/ORACDB3/dictionary.ora'," +
+                    "OPTIONS => SYS.DBMS_LOGMNR.SKIP_CORRUPTION" +
+                    "                   + SYS.DBMS_LOGMNR.NO_SQL_DELIMITER" +
+                    "                   + SYS.DBMS_LOGMNR.NO_ROWID_IN_STMT" +
+                    "                   + SYS.DBMS_LOGMNR.STRING_LITERALS_IN_STMT);" +
+                    "END;";
+            LOGGER.info("start logminer sql:{}", sql);
+            return sql;
         }
         else {
             miningStrategy = "DBMS_LOGMNR.DICT_FROM_ONLINE_CATALOG ";

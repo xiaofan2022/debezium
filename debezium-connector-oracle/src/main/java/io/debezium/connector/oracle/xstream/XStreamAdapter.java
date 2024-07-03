@@ -79,6 +79,7 @@ public class XStreamAdapter extends AbstractStreamingAdapter {
 
     @Override
     public StreamingChangeEventSource<OraclePartition, OracleOffsetContext> getSource(OracleConnection connection,
+                                                                                      OracleConnection miningJdbcConnection,
                                                                                       EventDispatcher<OraclePartition, TableId> dispatcher,
                                                                                       ErrorHandler errorHandler,
                                                                                       Clock clock,
