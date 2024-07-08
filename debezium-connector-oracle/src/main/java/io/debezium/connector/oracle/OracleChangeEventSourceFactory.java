@@ -64,6 +64,7 @@ public class OracleChangeEventSourceFactory implements ChangeEventSourceFactory<
         return configuration.getAdapter().getSource(
                 jdbcConnection,
                 miningJdbcConnection,
+                miningConfiguration,
                 dispatcher,
                 errorHandler,
                 clock,

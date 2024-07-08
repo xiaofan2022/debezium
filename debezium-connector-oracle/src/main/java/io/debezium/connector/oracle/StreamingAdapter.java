@@ -62,6 +62,7 @@ public interface StreamingAdapter {
      */
     StreamingChangeEventSource<OraclePartition, OracleOffsetContext> getSource(OracleConnection connection,
                                                                                OracleConnection miningJdbcConnection,
+                                                                               OracleConnectorConfig miningConnectorConfig,
                                                                                EventDispatcher<OraclePartition, TableId> dispatcher,
                                                                                ErrorHandler errorHandler, Clock clock,
                                                                                OracleDatabaseSchema schema,

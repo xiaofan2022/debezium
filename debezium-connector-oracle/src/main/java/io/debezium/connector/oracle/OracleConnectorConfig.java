@@ -15,6 +15,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+import io.netty.util.internal.StringUtil;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
@@ -569,6 +570,10 @@ public class OracleConnectorConfig extends HistorizedRelationalDatabaseConnector
     private final IntervalHandlingMode intervalHandlingMode;
     private final SnapshotMode snapshotMode;
 
+    private final String directoryPath;
+    private  String directoryFileName="dictionary.ora";
+
+
     private final String oracleVersion;
     private ConnectorAdapter connectorAdapter;
     private final StreamingAdapter streamingAdapter;
@@ -651,6 +656,19 @@ public class OracleConnectorConfig extends HistorizedRelationalDatabaseConnector
         this.logMiningMaxDelay = Duration.ofMillis(config.getLong(LOG_MINING_LOG_BACKOFF_MAX_DELAY_MS));
         this.logMiningMaximumSession = Duration.ofMillis(config.getLong(LOG_MINING_SESSION_MAX_MS));
         this.logMiningTransactionSnapshotBoundaryMode = TransactionSnapshotBoundaryMode.parse(config.getString(LOG_MINING_TRANSACTION_SNAPSHOT_BOUNDARY_MODE));
+        this.directoryPath = config.getString("directory.path");
+        if(StringUtil.isNullOrEmpty(config.getString("directory.name"))){
+            this.directoryFileName=config.getString("directory.name");
+        }
+
+    }
+
+    public String getDirectoryPath() {
+        return directoryPath;
+    }
+
+    public String getDirectoryFileName() {
+        return directoryFileName;
     }
 
     private static String toUpperCase(String property) {

@@ -79,6 +79,7 @@ public class LogMinerStreamingChangeEventSource implements StreamingChangeEventS
     private final boolean isContinuousMining;
     private final OracleStreamingChangeEventSourceMetrics streamingMetrics;
     private final OracleConnectorConfig connectorConfig;
+    private final OracleConnectorConfig miningConnectorConfig;
     private final Duration archiveLogRetention;
     private final boolean archiveLogOnlyMode;
     private final String archiveDestinationName;
@@ -92,7 +93,7 @@ public class LogMinerStreamingChangeEventSource implements StreamingChangeEventS
     private List<LogFile> currentLogFiles;
     private List<BigInteger> currentRedoLogSequences;
 
-    public LogMinerStreamingChangeEventSource(OracleConnectorConfig connectorConfig,
+    public LogMinerStreamingChangeEventSource(OracleConnectorConfig connectorConfig,OracleConnectorConfig miningConnectorConfig,
                                               OracleConnection jdbcConnection, OracleConnection miningJdbcConnection, EventDispatcher<OraclePartition, TableId> dispatcher,
                                               ErrorHandler errorHandler, Clock clock, OracleDatabaseSchema schema,
                                               Configuration jdbcConfig, OracleStreamingChangeEventSourceMetrics streamingMetrics) {
@@ -102,6 +103,7 @@ public class LogMinerStreamingChangeEventSource implements StreamingChangeEventS
         this.clock = clock;
         this.schema = schema;
         this.connectorConfig = connectorConfig;
+        this.miningConnectorConfig=miningConnectorConfig;
         this.strategy = connectorConfig.getLogMiningStrategy();
         this.isContinuousMining = connectorConfig.isContinuousMining();
         this.errorHandler = errorHandler;
@@ -115,7 +117,7 @@ public class LogMinerStreamingChangeEventSource implements StreamingChangeEventS
         this.maxDelay = connectorConfig.getLogMiningMaxDelay();
     }
 
-    public LogMinerStreamingChangeEventSource(OracleConnectorConfig connectorConfig,
+    /*public LogMinerStreamingChangeEventSource(OracleConnectorConfig connectorConfig,
                                               OracleConnection jdbcConnection, EventDispatcher<OraclePartition, TableId> dispatcher,
                                               ErrorHandler errorHandler, Clock clock, OracleDatabaseSchema schema,
                                               Configuration jdbcConfig, OracleStreamingChangeEventSourceMetrics streamingMetrics) {
@@ -137,7 +139,7 @@ public class LogMinerStreamingChangeEventSource implements StreamingChangeEventS
         this.logFileQueryMaxRetries = connectorConfig.getMaximumNumberOfLogQueryRetries();
         this.initialDelay = connectorConfig.getLogMiningInitialDelay();
         this.maxDelay = connectorConfig.getLogMiningMaxDelay();
-    }
+    }*/
 
     /**
      * This is the loop to get changes from LogMiner
@@ -156,6 +158,9 @@ public class LogMinerStreamingChangeEventSource implements StreamingChangeEventS
             //两边都禁止自提交
             jdbcConnection.setAutoCommit(false);
             miningJdbcConnection.setAutoCommit(false);
+            String directoryPath = miningConnectorConfig.getDirectoryPath();
+
+            String directoryFullPath=directoryPath.endsWith("/")?miningConnectorConfig.getDirectoryPath()+miningConnectorConfig.getDirectoryFileName():directoryPath+"/"+miningConnectorConfig.getDirectoryFileName();
 
             startScn = offsetContext.getScn();
             snapshotScn = offsetContext.getSnapshotScn();
@@ -235,7 +240,7 @@ public class LogMinerStreamingChangeEventSource implements StreamingChangeEventS
                         }
 
                         if (context.isRunning()) {
-                            if (!startMiningSession(miningJdbcConnection, startScn, endScn, retryAttempts)) {
+                            if (!startMiningSession(miningJdbcConnection, startScn, endScn,directoryFullPath, retryAttempts)) {
                                 retryAttempts++;
                             }
                             else {
@@ -579,7 +584,7 @@ public class LogMinerStreamingChangeEventSource implements StreamingChangeEventS
      * @return true if the session was started successfully, false if it should be retried
      * @throws SQLException if mining session failed to start
      */
-    public boolean startMiningSession(OracleConnection connection, Scn startScn, Scn endScn, int attempts) throws SQLException {
+    public boolean startMiningSession(OracleConnection connection, Scn startScn, Scn endScn,String directoryFullPath, int attempts) throws SQLException {
         LOGGER.trace("Starting mining session startScn={}, endScn={}, strategy={}, continuous={}",
                 startScn, endScn, strategy, isContinuousMining);
 
@@ -588,7 +593,7 @@ public class LogMinerStreamingChangeEventSource implements StreamingChangeEventS
             // NOTE: we treat startSCN as the _exclusive_ lower bound for mining,
             // whereas START_LOGMNR takes an _inclusive_ lower bound, hence the increment.
             //connection.executeWithoutCommitting(SqlUtils.startLogMinerStatement(startScn.add(Scn.ONE), endScn, strategy, isContinuousMining));
-            miningJdbcConnection.executeWithoutCommitting(SqlUtils.startLogMinerStatement(startScn.add(Scn.ONE), endScn, strategy, isContinuousMining));
+            miningJdbcConnection.executeWithoutCommitting(SqlUtils.startLogMinerStatement(directoryFullPath,startScn.add(Scn.ONE), endScn, strategy, isContinuousMining));
             streamingMetrics.addCurrentMiningSessionStart(Duration.between(start, Instant.now()));
             return true;
         }

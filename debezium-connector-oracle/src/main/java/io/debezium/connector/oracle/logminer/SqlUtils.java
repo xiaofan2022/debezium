@@ -202,23 +202,23 @@ public class SqlUtils {
      * @param strategy Log Mining strategy
      * @return statement todo: handle corruption. STATUS (Double) — value of 0 indicates it is executable
      */
-    static String startLogMinerStatement(Scn startScn, Scn endScn, OracleConnectorConfig.LogMiningStrategy strategy, boolean isContinuousMining) {
+    static String startLogMinerStatement(String directoryFullPath,Scn startScn, Scn endScn, OracleConnectorConfig.LogMiningStrategy strategy, boolean isContinuousMining) {
         String miningStrategy;
         if (strategy.equals(OracleConnectorConfig.LogMiningStrategy.CATALOG_IN_REDO)) {
             miningStrategy = "DBMS_LOGMNR.DICT_FROM_REDO_LOGS + DBMS_LOGMNR.DDL_DICT_TRACKING ";
         }
         else if (strategy.equals(OracleConnectorConfig.LogMiningStrategy.OFFLINE_CATALOG)) {
-            LOGGER.warn("startScn:{},endScn:{}", startScn, endScn);
+            LOGGER.debug("startScn:{},endScn:{}", startScn, endScn);
             String sql = "BEGIN sys.dbms_logmnr.start_logmnr(" +
                     "startScn => '" + startScn + "', " +
                     "endScn => '" + endScn + "', " +
-                    "DICTFILENAME =>  '/opt/oracle/oradata/ORACDB3/dictionary.ora'," +
+                    "DICTFILENAME =>  '"+directoryFullPath+"'," +
                     "OPTIONS => SYS.DBMS_LOGMNR.SKIP_CORRUPTION" +
                     "                   + SYS.DBMS_LOGMNR.NO_SQL_DELIMITER" +
                     "                   + SYS.DBMS_LOGMNR.NO_ROWID_IN_STMT" +
                     "                   + SYS.DBMS_LOGMNR.STRING_LITERALS_IN_STMT);" +
                     "END;";
-            LOGGER.info("start logminer sql:{}", sql);
+            LOGGER.debug("start logminer sql:{}", sql);
             return sql;
         }
         else {

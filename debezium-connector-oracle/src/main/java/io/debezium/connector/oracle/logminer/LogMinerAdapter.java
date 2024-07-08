@@ -64,6 +64,7 @@ public class LogMinerAdapter extends AbstractStreamingAdapter {
 
     public static final String TYPE = "logminer";
 
+
     public LogMinerAdapter(OracleConnectorConfig connectorConfig) {
         super(connectorConfig);
     }
@@ -90,6 +91,7 @@ public class LogMinerAdapter extends AbstractStreamingAdapter {
 
     @Override
     public StreamingChangeEventSource<OraclePartition, OracleOffsetContext> getSource(OracleConnection connection,OracleConnection miningJdbcConnection,
+                                                                                      OracleConnectorConfig miningConnectorConfig,
                                                                                       EventDispatcher<OraclePartition, TableId> dispatcher,
                                                                                       ErrorHandler errorHandler,
                                                                                       Clock clock,
@@ -99,6 +101,7 @@ public class LogMinerAdapter extends AbstractStreamingAdapter {
                                                                                       OracleStreamingChangeEventSourceMetrics streamingMetrics) {
         return new LogMinerStreamingChangeEventSource(
                 connectorConfig,
+            miningConnectorConfig,
                 connection,
                 miningJdbcConnection,
                 dispatcher,
