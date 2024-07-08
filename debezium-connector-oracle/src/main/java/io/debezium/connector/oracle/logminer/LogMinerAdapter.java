@@ -115,7 +115,7 @@ public class LogMinerAdapter extends AbstractStreamingAdapter {
     @Override
     public OracleOffsetContext determineSnapshotOffset(RelationalSnapshotContext<OraclePartition, OracleOffsetContext> ctx,
                                                        OracleConnectorConfig connectorConfig,
-                                                       OracleConnection connection)
+                                                       OracleConnection connection,OracleConnection miningJdbcConnection)
             throws SQLException {
 
         final Scn latestTableDdlScn = getLatestTableDdlScn(ctx, connection).orElse(null);

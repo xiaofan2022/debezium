@@ -95,6 +95,6 @@ public interface StreamingAdapter {
      * @throws SQLException if a database error occurred
      */
     OracleOffsetContext determineSnapshotOffset(RelationalSnapshotContext<OraclePartition, OracleOffsetContext> ctx,
-                                                OracleConnectorConfig connectorConfig, OracleConnection connection)
+                                                OracleConnectorConfig connectorConfig, OracleConnection connection,OracleConnection miningJdbcConnection)
             throws SQLException;
 }
