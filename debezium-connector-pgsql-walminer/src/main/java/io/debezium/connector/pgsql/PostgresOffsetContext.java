@@ -17,8 +17,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.debezium.connector.SnapshotRecord;
-import io.debezium.connector.pgsql.connection.Lsn;
-import io.debezium.connector.pgsql.connection.PostgresConnection;
 import io.debezium.connector.pgsql.spi.OffsetState;
 import io.debezium.pipeline.source.snapshot.incremental.IncrementalSnapshotContext;
 import io.debezium.pipeline.source.snapshot.incremental.SignalBasedIncrementalSnapshotContext;

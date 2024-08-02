@@ -9,7 +9,7 @@ package io.debezium.connector.pgsql;
 import org.postgresql.core.Oid;
 
 /**
- * Extension to the {@link org.postgresql.core.Oid} class which contains Postgres specific datatypes not found currently in the
+ * Extension to the {@link Oid} class which contains Postgres specific datatypes not found currently in the
  * JDBC driver implementation classes.
  *
  * @author Horia Chiorean (hchiorea@redhat.com)

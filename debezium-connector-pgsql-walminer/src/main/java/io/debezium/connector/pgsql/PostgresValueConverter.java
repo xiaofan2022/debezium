@@ -852,7 +852,7 @@ public class PostgresValueConverter extends JdbcValueConverters {
 
     @Override
     protected Object convertTimestampWithZone(Column column, Field fieldDefn, Object data) {
-        if (data instanceof java.util.Date) {
+        if (data instanceof Date) {
             // any Date like subclasses will be given to us by the JDBC driver, which uses the local VM TZ, so we need to go
             // back to GMT
             data = OffsetDateTime.ofInstant(((Date) data).toInstant(), ZoneOffset.UTC);
@@ -883,21 +883,21 @@ public class PostgresValueConverter extends JdbcValueConverters {
 
     protected Object convertGeometry(Column column, Field fieldDefn, Object data) {
         final PostgisGeometry empty = PostgisGeometry.createEmpty();
-        return convertValue(column, fieldDefn, data, io.debezium.data.geometry.Geometry.createValue(fieldDefn.schema(), empty.getWkb(), empty.getSrid()), (r) -> {
+        return convertValue(column, fieldDefn, data, Geometry.createValue(fieldDefn.schema(), empty.getWkb(), empty.getSrid()), (r) -> {
             try {
                 final Schema schema = fieldDefn.schema();
                 if (data instanceof byte[]) {
                     PostgisGeometry geom = PostgisGeometry.fromHexEwkb(new String((byte[]) data, "ASCII"));
-                    r.deliver(io.debezium.data.geometry.Geometry.createValue(schema, geom.getWkb(), geom.getSrid()));
+                    r.deliver(Geometry.createValue(schema, geom.getWkb(), geom.getSrid()));
                 }
                 else if (data instanceof PGobject) {
                     PGobject pgo = (PGobject) data;
                     PostgisGeometry geom = PostgisGeometry.fromHexEwkb(pgo.getValue());
-                    r.deliver(io.debezium.data.geometry.Geometry.createValue(schema, geom.getWkb(), geom.getSrid()));
+                    r.deliver(Geometry.createValue(schema, geom.getWkb(), geom.getSrid()));
                 }
                 else if (data instanceof String) {
                     PostgisGeometry geom = PostgisGeometry.fromHexEwkb((String) data);
-                    r.deliver(io.debezium.data.geometry.Geometry.createValue(schema, geom.getWkb(), geom.getSrid()));
+                    r.deliver(Geometry.createValue(schema, geom.getWkb(), geom.getSrid()));
                 }
             }
             catch (IllegalArgumentException | UnsupportedEncodingException e) {
@@ -908,21 +908,21 @@ public class PostgresValueConverter extends JdbcValueConverters {
 
     protected Object convertGeography(Column column, Field fieldDefn, Object data) {
         final PostgisGeometry empty = PostgisGeometry.createEmpty();
-        return convertValue(column, fieldDefn, data, io.debezium.data.geometry.Geography.createValue(fieldDefn.schema(), empty.getWkb(), empty.getSrid()), (r) -> {
+        return convertValue(column, fieldDefn, data, Geography.createValue(fieldDefn.schema(), empty.getWkb(), empty.getSrid()), (r) -> {
             final Schema schema = fieldDefn.schema();
             try {
                 if (data instanceof byte[]) {
                     PostgisGeometry geom = PostgisGeometry.fromHexEwkb(new String((byte[]) data, "ASCII"));
-                    r.deliver(io.debezium.data.geometry.Geography.createValue(schema, geom.getWkb(), geom.getSrid()));
+                    r.deliver(Geography.createValue(schema, geom.getWkb(), geom.getSrid()));
                 }
                 else if (data instanceof PGobject) {
                     PGobject pgo = (PGobject) data;
                     PostgisGeometry geom = PostgisGeometry.fromHexEwkb(pgo.getValue());
-                    r.deliver(io.debezium.data.geometry.Geography.createValue(schema, geom.getWkb(), geom.getSrid()));
+                    r.deliver(Geography.createValue(schema, geom.getWkb(), geom.getSrid()));
                 }
                 else if (data instanceof String) {
                     PostgisGeometry geom = PostgisGeometry.fromHexEwkb((String) data);
-                    r.deliver(io.debezium.data.geometry.Geography.createValue(schema, geom.getWkb(), geom.getSrid()));
+                    r.deliver(Geography.createValue(schema, geom.getWkb(), geom.getSrid()));
                 }
             }
             catch (IllegalArgumentException | UnsupportedEncodingException e) {
@@ -1015,9 +1015,9 @@ public class PostgresValueConverter extends JdbcValueConverters {
                 break;
             }
             case PgOid.TIMESTAMPTZ: {
-                if (value instanceof java.sql.Timestamp) {
+                if (value instanceof Timestamp) {
                     // Daylight savings isn't applied here, no need to account for it
-                    ZonedDateTime zonedDateTime = ZonedDateTime.of(((java.sql.Timestamp) value).toLocalDateTime(), systemDefault());
+                    ZonedDateTime zonedDateTime = ZonedDateTime.of(((Timestamp) value).toLocalDateTime(), systemDefault());
                     return OffsetDateTime.of(zonedDateTime.withZoneSameInstant(ZoneOffset.UTC).toLocalDateTime(), ZoneOffset.UTC);
                 }
             }
@@ -1086,9 +1086,6 @@ public class PostgresValueConverter extends JdbcValueConverters {
      */
     @Override
     protected Object convertBinaryToBytes(Column column, Field fieldDefn, Object data) {
-        if (data == UnchangedToastedReplicationMessageColumn.UNCHANGED_TOAST_VALUE) {
-            return toastPlaceholderBinary;
-        }
         if (data instanceof PgArray) {
             data = ((PgArray) data).toString();
         }
@@ -1114,19 +1111,23 @@ public class PostgresValueConverter extends JdbcValueConverters {
      * @return the converted value, or null if the conversion could not be made and the column allows nulls
      * @throws IllegalArgumentException if the value could not be converted but the column does not allow nulls
      */
-    @Override
-    protected Object convertString(Column column, Field fieldDefn, Object data) {
-        if (data == UnchangedToastedReplicationMessageColumn.UNCHANGED_TOAST_VALUE) {
-            return toastPlaceholderString;
-        }
-        return super.convertString(column, fieldDefn, data);
-    }
+    /*
+     * @Override
+     * protected Object convertString(Column column, Field fieldDefn, Object data) {
+     * if (data == UnchangedToastedReplicationMessageColumn.UNCHANGED_TOAST_VALUE) {
+     * return toastPlaceholderString;
+     * }
+     * return super.convertString(column, fieldDefn, data);
+     * }
+     */
 
-    @Override
-    protected Object handleUnknownData(Column column, Field fieldDefn, Object data) {
-        if (data == UnchangedToastedReplicationMessageColumn.UNCHANGED_TOAST_VALUE) {
-            return toastPlaceholderString;
-        }
-        return super.handleUnknownData(column, fieldDefn, data);
-    }
+    /*
+     * @Override
+     * protected Object handleUnknownData(Column column, Field fieldDefn, Object data) {
+     * if (data == UnchangedToastedReplicationMessageColumn.UNCHANGED_TOAST_VALUE) {
+     * return toastPlaceholderString;
+     * }
+     * return super.handleUnknownData(column, fieldDefn, data);
+     * }
+     */
 }

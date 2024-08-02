@@ -14,9 +14,6 @@ import org.slf4j.LoggerFactory;
 
 import io.debezium.annotation.ThreadSafe;
 import io.debezium.connector.common.CdcSourceTaskContext;
-import io.debezium.connector.pgsql.connection.PostgresConnection;
-import io.debezium.connector.pgsql.connection.ReplicationConnection;
-import io.debezium.connector.pgsql.spi.SlotState;
 import io.debezium.relational.TableId;
 import io.debezium.schema.TopicSelector;
 import io.debezium.util.Clock;
@@ -66,58 +63,6 @@ public class PostgresTaskContext extends CdcSourceTaskContext {
 
     protected void refreshSchema(PostgresConnection connection, boolean printReplicaIdentityInfo) throws SQLException {
         schema.refresh(connection, printReplicaIdentityInfo);
-    }
-
-    Long getSlotXmin(PostgresConnection connection) throws SQLException {
-        // when xmin fetch is set to 0, we don't track it to ignore any performance of querying the
-        // slot periodically
-        if (config.xminFetchInterval().toMillis() <= 0) {
-            return null;
-        }
-        assert (this.refreshXmin != null);
-
-        if (this.refreshXmin.hasElapsed()) {
-            lastXmin = getCurrentSlotState(connection).slotCatalogXmin();
-            if (LOGGER.isDebugEnabled()) {
-                LOGGER.debug("Fetched new xmin from slot of {}", lastXmin);
-            }
-        }
-        else {
-            if (LOGGER.isTraceEnabled()) {
-                LOGGER.trace("reusing xmin value of {}", lastXmin);
-            }
-        }
-
-        return lastXmin;
-    }
-
-    private SlotState getCurrentSlotState(PostgresConnection connection) throws SQLException {
-        return connection.getReplicationSlotState(config.slotName(), config.plugin().getPostgresPluginName());
-    }
-
-    protected ReplicationConnection createReplicationConnection(boolean doSnapshot, PostgresConnection jdbcConnection) throws SQLException {
-        final boolean dropSlotOnStop = config.dropSlotOnStop();
-        if (dropSlotOnStop) {
-            LOGGER.warn(
-                    "Connector has enabled automated replication slot removal upon restart ({} = true). " +
-                            "This setting is not recommended for production environments, as a new replication slot " +
-                            "will be created after a connector restart, resulting in missed data change events.",
-                    PostgresConnectorConfig.DROP_SLOT_ON_STOP.name());
-        }
-        return ReplicationConnection.builder(config)
-                .withSlot(config.slotName())
-                .withPublication(config.publicationName())
-                .withTableFilter(config.getTableFilters())
-                .withPublicationAutocreateMode(config.publicationAutocreateMode())
-                .withPlugin(config.plugin())
-                .dropSlotOnClose(dropSlotOnStop)
-                .streamParams(config.streamParams())
-                .statusUpdateInterval(config.statusUpdateInterval())
-                .withTypeRegistry(schema.getTypeRegistry())
-                .doSnapshot(doSnapshot)
-                .withSchema(schema)
-                .jdbcMetadataConnection(jdbcConnection)
-                .build();
     }
 
     PostgresConnectorConfig getConfig() {

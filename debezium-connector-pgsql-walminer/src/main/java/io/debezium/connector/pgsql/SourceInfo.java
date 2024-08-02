@@ -16,7 +16,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.debezium.annotation.NotThreadSafe;
 import io.debezium.connector.SnapshotRecord;
 import io.debezium.connector.common.BaseSourceInfo;
-import io.debezium.connector.pgsql.connection.Lsn;
 import io.debezium.relational.TableId;
 
 /**

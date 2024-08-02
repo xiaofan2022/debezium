@@ -11,15 +11,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.debezium.connector.base.ChangeEventQueue;
-import io.debezium.connector.pgsql.connection.LogicalDecodingMessage;
 import io.debezium.heartbeat.HeartbeatFactory;
 import io.debezium.jdbc.JdbcConnection;
 import io.debezium.pipeline.DataChangeEvent;
 import io.debezium.pipeline.EventDispatcher;
 import io.debezium.pipeline.source.spi.EventMetadataProvider;
 import io.debezium.pipeline.spi.ChangeEventCreator;
-import io.debezium.pipeline.spi.OffsetContext;
-import io.debezium.pipeline.spi.Partition;
 import io.debezium.schema.DataCollectionFilters;
 import io.debezium.schema.DataCollectionId;
 import io.debezium.schema.DatabaseSchema;
@@ -27,15 +24,12 @@ import io.debezium.schema.TopicSelector;
 import io.debezium.util.SchemaNameAdjuster;
 
 /**
- * Custom extension of the {@link EventDispatcher} to accommodate routing {@link LogicalDecodingMessage} events to the change event queue.
  *
  * @author Lairen Hightower
  */
 public class PostgresEventDispatcher<T extends DataCollectionId> extends EventDispatcher<PostgresPartition, T> {
     private static final Logger LOGGER = LoggerFactory.getLogger(PostgresEventDispatcher.class);
     private final ChangeEventQueue<DataChangeEvent> queue;
-    private final LogicalDecodingMessageMonitor logicalDecodingMessageMonitor;
-    private final LogicalDecodingMessageFilter messageFilter;
 
     public PostgresEventDispatcher(PostgresConnectorConfig connectorConfig, TopicSelector<T> topicSelector,
                                    DatabaseSchema<T> schema, ChangeEventQueue<DataChangeEvent> queue, DataCollectionFilters.DataCollectionFilter<T> filter,
@@ -60,20 +54,20 @@ public class PostgresEventDispatcher<T extends DataCollectionId> extends EventDi
         super(connectorConfig, topicSelector, schema, queue, filter, changeEventCreator, inconsistentSchemaHandler, metadataProvider,
                 heartbeatFactory, schemaNameAdjuster);
         this.queue = queue;
-        this.logicalDecodingMessageMonitor = new LogicalDecodingMessageMonitor(connectorConfig, this::enqueueLogicalDecodingMessage);
-        this.messageFilter = connectorConfig.getMessageFilter();
     }
 
-    public void dispatchLogicalDecodingMessage(Partition partition, OffsetContext offset, Long decodeTimestamp,
-                                               LogicalDecodingMessage message)
-            throws InterruptedException {
-        if (messageFilter.isIncluded(message.getPrefix())) {
-            logicalDecodingMessageMonitor.logicalDecodingMessageEvent(partition, offset, decodeTimestamp, message);
-        }
-        else {
-            LOGGER.trace("Filtered data change event for logical decoding message with prefix{}", message.getPrefix());
-        }
-    }
+    /*
+     * public void dispatchLogicalDecodingMessage(Partition partition, OffsetContext offset, Long decodeTimestamp,
+     * LogicalDecodingMessage message)
+     * throws InterruptedException {
+     * if (messageFilter.isIncluded(message.getPrefix())) {
+     * logicalDecodingMessageMonitor.logicalDecodingMessageEvent(partition, offset, decodeTimestamp, message);
+     * }
+     * else {
+     * LOGGER.trace("Filtered data change event for logical decoding message with prefix{}", message.getPrefix());
+     * }
+     * }
+     */
 
     private void enqueueLogicalDecodingMessage(SourceRecord record) throws InterruptedException {
         queue.enqueue(new DataChangeEvent(record));

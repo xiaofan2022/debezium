@@ -4,13 +4,11 @@
  * Licensed under the Apache Software License version 2.0, available at http://www.apache.org/licenses/LICENSE-2.0
  */
 
-package io.debezium.connector.pgsql.connection;
+package io.debezium.connector.pgsql;
 
 import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
-
-import io.debezium.connector.pgsql.spi.SlotState;
 
 /**
  * Information about a running Postgres instance.
@@ -189,10 +187,6 @@ public class ServerInfo {
 
         protected boolean hasValidFlushedLsn() {
             return latestFlushedLsn != null;
-        }
-
-        protected SlotState asSlotState() {
-            return new SlotState(latestFlushedLsn, restartLsn, catalogXmin, active);
         }
 
         @Override

@@ -20,7 +20,6 @@ import org.slf4j.LoggerFactory;
 
 import io.debezium.config.Configuration;
 import io.debezium.connector.common.RelationalBaseSourceConnector;
-import io.debezium.connector.pgsql.connection.PostgresConnection;
 import io.debezium.relational.RelationalDatabaseConnectorConfig;
 
 /**
@@ -74,12 +73,6 @@ public class PostgresConnector extends RelationalBaseSourceConnector {
     @Override
     protected void validateConnection(Map<String, ConfigValue> configValues, Configuration config) {
         final ConfigValue databaseValue = configValues.get(RelationalDatabaseConnectorConfig.DATABASE_NAME.name());
-        final ConfigValue slotNameValue = configValues.get(PostgresConnectorConfig.SLOT_NAME.name());
-        final ConfigValue pluginNameValue = configValues.get(PostgresConnectorConfig.PLUGIN_NAME.name());
-        if (!databaseValue.errorMessages().isEmpty() || !slotNameValue.errorMessages().isEmpty()
-                || !pluginNameValue.errorMessages().isEmpty()) {
-            return;
-        }
 
         final PostgresConnectorConfig postgresConfig = new PostgresConnectorConfig(config);
         final ConfigValue hostnameValue = configValues.get(RelationalDatabaseConnectorConfig.HOSTNAME.name());

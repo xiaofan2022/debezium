@@ -34,7 +34,6 @@ public class PostgresChangeEventSourceCoordinator extends ChangeEventSourceCoord
     private static final Logger LOGGER = LoggerFactory.getLogger(PostgresChangeEventSourceCoordinator.class);
 
     private final Snapshotter snapshotter;
-    private final SlotState slotInfo;
 
     public PostgresChangeEventSourceCoordinator(Offsets<PostgresPartition, PostgresOffsetContext> previousOffsets,
                                                 ErrorHandler errorHandler,
@@ -47,7 +46,6 @@ public class PostgresChangeEventSourceCoordinator extends ChangeEventSourceCoord
         super(previousOffsets, errorHandler, connectorType, connectorConfig, changeEventSourceFactory,
                 changeEventSourceMetricsFactory, eventDispatcher, schema);
         this.snapshotter = snapshotter;
-        this.slotInfo = slotInfo;
     }
 
     @Override
@@ -56,7 +54,7 @@ public class PostgresChangeEventSourceCoordinator extends ChangeEventSourceCoord
                                                              PostgresPartition partition,
                                                              PostgresOffsetContext previousOffset)
             throws InterruptedException {
-        if (previousOffset != null && !snapshotter.shouldStreamEventsStartingFromSnapshot() && slotInfo != null) {
+        if (previousOffset != null && !snapshotter.shouldStreamEventsStartingFromSnapshot()) {
             try {
                 setSnapshotStartLsn((PostgresSnapshotChangeEventSource) snapshotSource,
                         previousOffset);

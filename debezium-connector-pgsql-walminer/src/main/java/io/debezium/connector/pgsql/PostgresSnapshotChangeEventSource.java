@@ -15,8 +15,6 @@ import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import io.debezium.connector.pgsql.connection.Lsn;
-import io.debezium.connector.pgsql.connection.PostgresConnection;
 import io.debezium.connector.pgsql.spi.SlotCreationResult;
 import io.debezium.connector.pgsql.spi.SlotState;
 import io.debezium.connector.pgsql.spi.Snapshotter;
@@ -154,20 +152,6 @@ public class PostgresSnapshotChangeEventSource extends RelationalSnapshotChangeE
     }
 
     private Lsn getTransactionStartLsn() throws SQLException {
-        if (slotCreatedInfo != null) {
-            // When performing an exported snapshot based on a newly created replication slot, the txLogStart position
-            // should be based on the replication slot snapshot transaction point. This is crucial so that if any
-            // SQL operations occur mid-snapshot that they'll be properly captured when streaming begins; otherwise
-            // they'll be lost.
-            return slotCreatedInfo.startLsn();
-        }
-        else if (!snapshotter.shouldStreamEventsStartingFromSnapshot() && startingSlotInfo != null) {
-            // Allow streaming to resume from where streaming stopped last rather than where the current snapshot starts.
-            SlotState currentSlotState = jdbcConnection.getReplicationSlotState(connectorConfig.slotName(),
-                    connectorConfig.plugin().getPostgresPluginName());
-            return currentSlotState.slotLastFlushedLsn();
-        }
-
         return Lsn.valueOf(jdbcConnection.currentXLogLocation());
     }
 

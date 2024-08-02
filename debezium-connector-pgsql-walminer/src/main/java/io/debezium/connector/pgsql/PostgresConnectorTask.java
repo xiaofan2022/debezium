@@ -8,7 +8,6 @@ package io.debezium.connector.pgsql;
 
 import java.nio.charset.Charset;
 import java.sql.SQLException;
-import java.time.Duration;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -23,10 +22,7 @@ import io.debezium.config.Configuration;
 import io.debezium.config.Field;
 import io.debezium.connector.base.ChangeEventQueue;
 import io.debezium.connector.common.BaseSourceTask;
-import io.debezium.connector.pgsql.connection.PostgresConnection;
-import io.debezium.connector.pgsql.connection.PostgresConnection.PostgresValueConverterBuilder;
-import io.debezium.connector.pgsql.connection.PostgresDefaultValueConverter;
-import io.debezium.connector.pgsql.connection.ReplicationConnection;
+import io.debezium.connector.pgsql.PostgresConnection.PostgresValueConverterBuilder;
 import io.debezium.connector.pgsql.spi.SlotCreationResult;
 import io.debezium.connector.pgsql.spi.SlotState;
 import io.debezium.connector.pgsql.spi.Snapshotter;
@@ -40,7 +36,6 @@ import io.debezium.relational.TableId;
 import io.debezium.schema.TopicSelector;
 import io.debezium.util.Clock;
 import io.debezium.util.LoggingContext;
-import io.debezium.util.Metronome;
 import io.debezium.util.SchemaNameAdjuster;
 
 /**
@@ -56,7 +51,6 @@ public class PostgresConnectorTask extends BaseSourceTask<PostgresPartition, Pos
     private volatile PostgresTaskContext taskContext;
     private volatile ChangeEventQueue<DataChangeEvent> queue;
     private volatile PostgresConnection jdbcConnection;
-    private volatile ReplicationConnection replicationConnection = null;
     private volatile PostgresSchema schema;
 
     @Override
@@ -108,7 +102,6 @@ public class PostgresConnectorTask extends BaseSourceTask<PostgresPartition, Pos
                 if (LOGGER.isInfoEnabled()) {
                     LOGGER.info(jdbcConnection.serverInfo().toString());
                 }
-                slotInfo = jdbcConnection.getReplicationSlotState(connectorConfig.slotName(), connectorConfig.plugin().getPostgresPluginName());
             }
             catch (SQLException e) {
                 LOGGER.warn("unable to load info of replication slot, Debezium will try to create the slot");
@@ -125,29 +118,6 @@ public class PostgresConnectorTask extends BaseSourceTask<PostgresPartition, Pos
             }
 
             SlotCreationResult slotCreatedInfo = null;
-            if (snapshotter.shouldStream()) {
-                final boolean doSnapshot = snapshotter.shouldSnapshot();
-                replicationConnection = createReplicationConnection(this.taskContext,
-                        doSnapshot, connectorConfig.maxRetries(), connectorConfig.retryDelay());
-
-                // we need to create the slot before we start streaming if it doesn't exist
-                // otherwise we can't stream back changes happening while the snapshot is taking place
-                if (slotInfo == null) {
-                    try {
-                        slotCreatedInfo = replicationConnection.createReplicationSlot().orElse(null);
-                    }
-                    catch (SQLException ex) {
-                        String message = "Creation of replication slot failed";
-                        if (ex.getMessage().contains("already exists")) {
-                            message += "; when setting up multiple connectors for the same database host, please make sure to use a distinct replication slot name for each.";
-                        }
-                        throw new DebeziumException(message, ex);
-                    }
-                }
-                else {
-                    slotCreatedInfo = null;
-                }
-            }
 
             try {
                 jdbcConnection.commit();
@@ -175,7 +145,7 @@ public class PostgresConnectorTask extends BaseSourceTask<PostgresPartition, Pos
                     queue,
                     connectorConfig.getTableFilters().dataCollectionFilter(),
                     DataChangeEvent::new,
-                    PostgresChangeRecordEmitter::updateSchema,
+                    null,
                     metadataProvider,
                     new HeartbeatFactory<>(
                             connectorConfig,
@@ -212,7 +182,6 @@ public class PostgresConnectorTask extends BaseSourceTask<PostgresPartition, Pos
                             clock,
                             schema,
                             taskContext,
-                            replicationConnection,
                             slotCreatedInfo,
                             slotInfo),
                     new DefaultChangeEventSourceMetricsFactory(),
@@ -228,36 +197,6 @@ public class PostgresConnectorTask extends BaseSourceTask<PostgresPartition, Pos
         finally {
             previousContext.restore();
         }
-    }
-
-    public ReplicationConnection createReplicationConnection(PostgresTaskContext taskContext, boolean doSnapshot, int maxRetries, Duration retryDelay)
-            throws ConnectException {
-        final Metronome metronome = Metronome.parker(retryDelay, Clock.SYSTEM);
-        short retryCount = 0;
-        ReplicationConnection replicationConnection = null;
-        while (retryCount <= maxRetries) {
-            try {
-                return taskContext.createReplicationConnection(doSnapshot, jdbcConnection);
-            }
-            catch (SQLException ex) {
-                retryCount++;
-                if (retryCount > maxRetries) {
-                    LOGGER.error("Too many errors connecting to server. All {} retries failed.", maxRetries);
-                    throw new ConnectException(ex);
-                }
-
-                LOGGER.warn("Error connecting to server; will attempt retry {} of {} after {} " +
-                        "seconds. Exception message: {}", retryCount, maxRetries, retryDelay.getSeconds(), ex.getMessage());
-                try {
-                    metronome.pause();
-                }
-                catch (InterruptedException e) {
-                    LOGGER.warn("Connection retry sleep interrupted by exception: " + e);
-                    Thread.currentThread().interrupt();
-                }
-            }
-        }
-        return replicationConnection;
     }
 
     @Override
@@ -277,15 +216,6 @@ public class PostgresConnectorTask extends BaseSourceTask<PostgresPartition, Pos
         // in case of error it can happen that the connector is terminated before the stremaing
         // phase is started. It can lead to a leaked connection.
         // This is guard to make sure the connection is closed.
-        try {
-            if (replicationConnection != null) {
-                replicationConnection.close();
-            }
-        }
-        catch (Exception e) {
-            LOGGER.trace("Error while closing replication connection", e);
-        }
-
         if (jdbcConnection != null) {
             jdbcConnection.close();
         }

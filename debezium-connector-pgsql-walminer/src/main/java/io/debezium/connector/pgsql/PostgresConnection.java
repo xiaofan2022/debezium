@@ -4,7 +4,7 @@
  * Licensed under the Apache Software License version 2.0, available at http://www.apache.org/licenses/LICENSE-2.0
  */
 
-package io.debezium.connector.pgsql.connection;
+package io.debezium.connector.pgsql;
 
 import java.nio.charset.Charset;
 import java.sql.DatabaseMetaData;
@@ -29,15 +29,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.debezium.DebeziumException;
-import io.debezium.annotation.VisibleForTesting;
 import io.debezium.config.Configuration;
-import io.debezium.connector.pgsql.PgOid;
-import io.debezium.connector.pgsql.PostgresConnectorConfig;
-import io.debezium.connector.pgsql.PostgresSchema;
-import io.debezium.connector.pgsql.PostgresType;
-import io.debezium.connector.pgsql.PostgresValueConverter;
-import io.debezium.connector.pgsql.TypeRegistry;
-import io.debezium.connector.pgsql.spi.SlotState;
 import io.debezium.data.SpecialValueDecimal;
 import io.debezium.jdbc.JdbcConfiguration;
 import io.debezium.jdbc.JdbcConnection;
@@ -152,135 +144,6 @@ public class PostgresConnection extends JdbcConnection {
      */
     public String connectionString() {
         return connectionString(URL_PATTERN);
-    }
-
-    /**
-     * Prints out information about the REPLICA IDENTITY status of a table.
-     * This in turn determines how much information is available for UPDATE and DELETE operations for logical replication.
-     *
-     * @param tableId the identifier of the table
-     * @return the replica identity information; never null
-     * @throws SQLException if there is a problem obtaining the replica identity information for the given table
-     */
-    public ServerInfo.ReplicaIdentity readReplicaIdentityInfo(TableId tableId) throws SQLException {
-        String statement = "SELECT relreplident FROM pg_catalog.pg_class c " +
-                "LEFT JOIN pg_catalog.pg_namespace n ON c.relnamespace=n.oid " +
-                "WHERE n.nspname=? and c.relname=?";
-        String schema = tableId.schema() != null && tableId.schema().length() > 0 ? tableId.schema() : "public";
-        StringBuilder replIdentity = new StringBuilder();
-        prepareQuery(statement, stmt -> {
-            stmt.setString(1, schema);
-            stmt.setString(2, tableId.table());
-        }, rs -> {
-            if (rs.next()) {
-                replIdentity.append(rs.getString(1));
-            }
-            else {
-                LOGGER.warn("Cannot determine REPLICA IDENTITY information for table '{}'", tableId);
-            }
-        });
-        return ServerInfo.ReplicaIdentity.parseFromDB(replIdentity.toString());
-    }
-
-    /**
-     * Returns the current state of the replication slot
-     * @param slotName the name of the slot
-     * @param pluginName the name of the plugin used for the desired slot
-     * @return the {@link SlotState} or null, if no slot state is found
-     * @throws SQLException
-     */
-    public SlotState getReplicationSlotState(String slotName, String pluginName) throws SQLException {
-        ServerInfo.ReplicationSlot slot;
-        try {
-            slot = readReplicationSlotInfo(slotName, pluginName);
-            if (slot.equals(ServerInfo.ReplicationSlot.INVALID)) {
-                return null;
-            }
-            else {
-                return slot.asSlotState();
-            }
-        }
-        catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new ConnectException("Interrupted while waiting for valid replication slot info", e);
-        }
-    }
-
-    /**
-     * Fetches the state of a replication stage given a slot name and plugin name
-     * @param slotName the name of the slot
-     * @param pluginName the name of the plugin used for the desired slot
-     * @return the {@link ServerInfo.ReplicationSlot} object or a {@link ServerInfo.ReplicationSlot#INVALID} if
-     *         the slot is not valid
-     * @throws SQLException is thrown by the underlying JDBC
-     */
-    private ServerInfo.ReplicationSlot fetchReplicationSlotInfo(String slotName, String pluginName) throws SQLException {
-        final String database = database();
-        final ServerInfo.ReplicationSlot slot = queryForSlot(slotName, database, pluginName,
-                rs -> {
-                    if (rs.next()) {
-                        boolean active = rs.getBoolean("active");
-                        final Lsn confirmedFlushedLsn = parseConfirmedFlushLsn(slotName, pluginName, database, rs);
-                        if (confirmedFlushedLsn == null) {
-                            return null;
-                        }
-                        Lsn restartLsn = parseRestartLsn(slotName, pluginName, database, rs);
-                        if (restartLsn == null) {
-                            return null;
-                        }
-                        final Long xmin = rs.getLong("catalog_xmin");
-                        return new ServerInfo.ReplicationSlot(active, confirmedFlushedLsn, restartLsn, xmin);
-                    }
-                    else {
-                        LOGGER.debug("No replication slot '{}' is present for plugin '{}' and database '{}'", slotName,
-                                pluginName, database);
-                        return ServerInfo.ReplicationSlot.INVALID;
-                    }
-                });
-        return slot;
-    }
-
-    /**
-     * Fetches a replication slot, repeating the query until either the slot is created or until
-     * the max number of attempts has been reached
-     *
-     * To fetch the slot without the retries, use the {@link PostgresConnection#fetchReplicationSlotInfo} call
-     * @param slotName the slot name
-     * @param pluginName the name of the plugin
-     * @return the {@link ServerInfo.ReplicationSlot} object or a {@link ServerInfo.ReplicationSlot#INVALID} if
-     *         the slot is not valid
-     * @throws SQLException is thrown by the underyling jdbc driver
-     * @throws InterruptedException is thrown if we don't return an answer within the set number of retries
-     */
-    @VisibleForTesting
-    ServerInfo.ReplicationSlot readReplicationSlotInfo(String slotName, String pluginName) throws SQLException, InterruptedException {
-        final String database = database();
-        final Metronome metronome = Metronome.parker(PAUSE_BETWEEN_REPLICATION_SLOT_RETRIEVAL_ATTEMPTS, Clock.SYSTEM);
-
-        for (int attempt = 1; attempt <= MAX_ATTEMPTS_FOR_OBTAINING_REPLICATION_SLOT; attempt++) {
-            final ServerInfo.ReplicationSlot slot = fetchReplicationSlotInfo(slotName, pluginName);
-            if (slot != null) {
-                LOGGER.info("Obtained valid replication slot {}", slot);
-                return slot;
-            }
-            LOGGER.warn(
-                    "Cannot obtain valid replication slot '{}' for plugin '{}' and database '{}' [during attempt {} out of {}, concurrent tx probably blocks taking snapshot.",
-                    slotName, pluginName, database, attempt, MAX_ATTEMPTS_FOR_OBTAINING_REPLICATION_SLOT);
-            metronome.pause();
-        }
-
-        throw new ConnectException("Unable to obtain valid replication slot. "
-                + "Make sure there are no long-running transactions running in parallel as they may hinder the allocation of the replication slot when starting this connector");
-    }
-
-    protected ServerInfo.ReplicationSlot queryForSlot(String slotName, String database, String pluginName,
-                                                      ResultSetMapper<ServerInfo.ReplicationSlot> map)
-            throws SQLException {
-        return prepareQueryAndMap("select * from pg_replication_slots where slot_name = ? and database = ? and plugin = ?", statement -> {
-            statement.setString(1, slotName);
-            statement.setString(2, database);
-            statement.setString(3, pluginName);
-        }, map);
     }
 
     /**

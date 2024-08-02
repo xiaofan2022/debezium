@@ -7,8 +7,6 @@ package io.debezium.connector.pgsql;
 
 import java.util.Optional;
 
-import io.debezium.connector.pgsql.connection.PostgresConnection;
-import io.debezium.connector.pgsql.connection.ReplicationConnection;
 import io.debezium.connector.pgsql.spi.SlotCreationResult;
 import io.debezium.connector.pgsql.spi.SlotState;
 import io.debezium.connector.pgsql.spi.Snapshotter;
@@ -34,14 +32,13 @@ public class PostgresChangeEventSourceFactory implements ChangeEventSourceFactor
     private final PostgresSchema schema;
     private final PostgresTaskContext taskContext;
     private final Snapshotter snapshotter;
-    private final ReplicationConnection replicationConnection;
     private final SlotCreationResult slotCreatedInfo;
     private final SlotState startingSlotInfo;
 
     public PostgresChangeEventSourceFactory(PostgresConnectorConfig configuration, Snapshotter snapshotter, PostgresConnection jdbcConnection,
                                             ErrorHandler errorHandler, PostgresEventDispatcher<TableId> dispatcher, Clock clock, PostgresSchema schema,
                                             PostgresTaskContext taskContext,
-                                            ReplicationConnection replicationConnection, SlotCreationResult slotCreatedInfo, SlotState startingSlotInfo) {
+                                            SlotCreationResult slotCreatedInfo, SlotState startingSlotInfo) {
         this.configuration = configuration;
         this.jdbcConnection = jdbcConnection;
         this.errorHandler = errorHandler;
@@ -50,7 +47,6 @@ public class PostgresChangeEventSourceFactory implements ChangeEventSourceFactor
         this.schema = schema;
         this.taskContext = taskContext;
         this.snapshotter = snapshotter;
-        this.replicationConnection = replicationConnection;
         this.slotCreatedInfo = slotCreatedInfo;
         this.startingSlotInfo = startingSlotInfo;
     }
@@ -79,8 +75,7 @@ public class PostgresChangeEventSourceFactory implements ChangeEventSourceFactor
                 errorHandler,
                 clock,
                 schema,
-                taskContext,
-                replicationConnection);
+                taskContext);
     }
 
     @Override

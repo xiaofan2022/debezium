@@ -6,7 +6,7 @@
 package io.debezium.connector.pgsql.spi;
 
 import io.debezium.common.annotation.Incubating;
-import io.debezium.connector.pgsql.connection.Lsn;
+import io.debezium.connector.pgsql.Lsn;
 
 /**
  * A simple data container that holds the state of the current slot

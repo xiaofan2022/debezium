@@ -27,7 +27,6 @@ import org.slf4j.LoggerFactory;
 
 import io.debezium.DebeziumException;
 import io.debezium.annotation.Immutable;
-import io.debezium.connector.pgsql.connection.PostgresConnection;
 import io.debezium.util.Collect;
 
 /**

@@ -8,7 +8,7 @@ package io.debezium.connector.pgsql.spi;
 import java.time.Instant;
 
 import io.debezium.common.annotation.Incubating;
-import io.debezium.connector.pgsql.connection.Lsn;
+import io.debezium.connector.pgsql.Lsn;
 
 /**
  * A simple data container that represents the last seen offset

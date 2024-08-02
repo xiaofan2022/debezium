@@ -19,9 +19,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.debezium.annotation.NotThreadSafe;
-import io.debezium.connector.pgsql.connection.PostgresConnection;
-import io.debezium.connector.pgsql.connection.PostgresDefaultValueConverter;
-import io.debezium.connector.pgsql.connection.ServerInfo;
 import io.debezium.jdbc.JdbcConnection;
 import io.debezium.relational.RelationalDatabaseSchema;
 import io.debezium.relational.Table;
@@ -85,26 +82,12 @@ public class PostgresSchema extends RelationalDatabaseSchema {
     protected PostgresSchema refresh(PostgresConnection connection, boolean printReplicaIdentityInfo) throws SQLException {
         // read all the information from the DB
         connection.readSchema(tables(), null, null, getTableFilter(), null, true);
-        if (printReplicaIdentityInfo) {
-            // print out all the replica identity info
-            tableIds().forEach(tableId -> printReplicaIdentityInfo(connection, tableId));
-        }
         // and then refresh the schemas
         refreshSchemas();
         if (readToastableColumns) {
             tableIds().forEach(tableId -> refreshToastableColumnsMap(connection, tableId));
         }
         return this;
-    }
-
-    private void printReplicaIdentityInfo(PostgresConnection connection, TableId tableId) {
-        try {
-            ServerInfo.ReplicaIdentity replicaIdentity = connection.readReplicaIdentityInfo(tableId);
-            LOGGER.info("REPLICA IDENTITY for '{}' is '{}'; {}", tableId, replicaIdentity, replicaIdentity.description());
-        }
-        catch (SQLException e) {
-            LOGGER.warn("Cannot determine REPLICA IDENTITY info for '{}'", tableId);
-        }
     }
 
     /**
